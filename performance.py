@@ -1,32 +1,55 @@
-'''import xml.etree.ElementTree as ET
-from xml.etree.ElementTree import ParseError
-import argparse
-import json
-import uuid'''
+
 import time
 import os
-'''import re
-import geojson
-from geojson import Feature, Point, FeatureCollection, Polygon
-import pdb'''
 
+
+##### Global Variable#######
+#Role opening
+ROLE_NAMES={'CLD_1','SPVR','GRO_1','GRO_2','ADC_1','ADC_2','ADC_3','DEP_1','DEP_2','FIN_1','FIN_2','FIN_3','APW_1','APW_2'}
+ROLE_OPEN_ACTION="UIS:  activation of Role by client "
+ROLE_OPEN_RESULT= "set role on front: "
+ROLE_OPEN_ACION_2="Button OK_BUTTON pressed."
+ROLE_OPEN_EXP_DELAY=0.2
+
+CLD_FORWARD_CALLSIGN="    LMB pressed on CLD_FORWARD (strip "
+CLD_FORWARD_ACTION="    LMB pressed on CLD_FORWARD (strip "
+CLD_FORWARD_RESULT="CldGroundZone:"
+CLD_FORWARD_EXP_DELAY=0.8
+
+TAKE_OFF_ACTION="    LMB pressed on TAKE_OFF_BUTTON (strip "
+TAKE_OFF_RESULT="DepartedZone:"
+TAKE_OFF_EXP_DELAY=0.5
+
+WAIT_LISTE_ACTION="    Double click on "
+WAIT_LISTE_RESULT="CldWaitListZone:"
+WAIT_LISTE_EXP_DELAY=0.3
+
+
+LANDING_ACTION="    LMB pressed on LANDING_BUTTON (strip "
+LANDING_RESULT="LandedZone:"
+LANDING_EXP_DELAY=0.5
+
+PERF_FILE='performance'
+LOG_PATH='./'
+##### Global Variable#######
 
 def openlogfile(name):
-    file_path="./"
+    file_path=input("Enter the path to the logs: ")
+    if file_path=='':file_path=LOG_PATH
     file_name=name
     complete_list = os.listdir(file_path)
     content=[]
     lname=len(file_name)
     for file in complete_list:
         if file[0:lname]==file_name:
-            writePerfFile(PERF_FILE,str(file)+" log file will be used for the test")
+            writePerfFile(str(file)+" log file will be used for the test")
             f=open(file,'r')
             if f.mode=="r":
                 content.append(f.readlines())
 
     return content
 
-def writePerfFile(title,line):
+def writePerfFile(line,title=PERF_FILE):
     print(line)
     file=title+"_"+time.strftime("%Y%m%d")+".txt"
     f=open(file,'a')
@@ -100,29 +123,37 @@ def getDelay(log,action_str,result_str,action_str2='',result_str2=''):
 
     return delays
 
+def testResult(result,expect):
+    if result==0:
+        writePerfFile("*********** NO DATA, TEST INVALID *************")
+        return
+    if result<=expect:
+        writePerfFile("*********** TEST PASSED **********" )
+        writePerfFile(' Average delay inferior to: '+str(expect)+"s")
+        return
+    else:
+        writePerfFile("*********** TEST FAILED **********")
+        writePerfFile(' Average delay supperior to: '+str(expect)+"s")
+        return
+    return
+
+def getAverageDelay(delays):
+    if delays==[]:return 0
+    return sum(delays)/len(delays)
+
 def delayRoleOpening(logs):
     avDelay=0 #average delay of role opening
     for role in ROLE_NAMES:
         delays=getDelay(logs,[ROLE_OPEN_ACTION+role],[ROLE_OPEN_RESULT+role],ROLE_OPEN_ACION_2)
         if len(delays)>0: #if there is at least one time calculated
-            writePerfFile(PERF_FILE,"Delays to open the role "+role+": "+str(delays))
-            for delay in delays:
-                avDelay=(avDelay+delay)/2
-    writePerfFile(PERF_FILE,"the average delay for role opening is:"+ str(avDelay))
+            #writePerfFile("Delays to open the role "+role+": "+str(delays))
+            avDelay=getAverageDelay(delays)
+    writePerfFile("The average delay for role opening is:"+ str(avDelay))
+    testResult(avDelay,ROLE_OPEN_EXP_DELAY)
 
     return
 
-'''def delayRoleChange(logs):
-    avDelay=0 #average delay of role opening
-    for role in ROLE_NAMES:
-        delays=getDelay(logs,[role+ROLE_CHANGE_ACTION],[ROLE_OPEN_RESULT+role])
-        if len(delays)>0: #if there is at least one time calculated
-            writePerfFile(PERF_FILE,"Delays to activate the role "+role+": "+str(delays))
-            for delay in delays:
-                avDelay=(avDelay+delay)/2
-    writePerfFile(PERF_FILE,"the average delay to activate an already open role is:"+ str(avDelay))
 
-    return'''
 def getDelayStringWithCallsign(logs, action_str,result_str,action_sep='',):
     delays=[]
     for line in logs: #looking for the callsign contained in the ligne "action_str"+callsign
@@ -135,56 +166,34 @@ def getDelayStringWithCallsign(logs, action_str,result_str,action_sep='',):
 
     return delays
 
-def delayCLDForward(logs):
-    avDelay=0
-    delays=getDelayStringWithCallsign(logs,CLD_FORWARD_ACTION,CLD_FORWARD_RESULT,')')
-    writePerfFile(PERF_FILE,"Delays to move a FS from the wait list to the ground zone: "+str(delays))
-    for delay in delays:
-        avDelay=(avDelay+delay)/2
-    writePerfFile(PERF_FILE,"the average delay to move a FS from the wait liste to the ground zone:"+ str(avDelay))
+def delayMoveFS(logs,dictMoveFS):
+    for move in dictMoveFS:
+        avDelay=0
+        delays=getDelayStringWithCallsign(logs,move["action"],move["result"],move["separator"])
+        #writePerfFile("Delays to move a FS from the "+move['Zone1']+" to the "+move["Zone2"]+': '+str(delays))
+        avDelay=getAverageDelay(delays)
+        writePerfFile("The average delay to move a FS from the "+move['Zone1']+" to the "+move["Zone2"]+' is: '+ str(avDelay))
+        testResult(avDelay,move["ExpDelay"])
     return
 
-def delayTakeOff(logs):
-    avDelay=0
-    delays=getDelayStringWithCallsign(logs,TAKE_OFF_ACTION,TAKE_OFF_RESULT,')')
-    writePerfFile(PERF_FILE,"Delays to move a FS from the ground zone to the departed zone: "+str(delays))
-    for delay in delays:
-        avDelay=(avDelay+delay)/2
-    writePerfFile(PERF_FILE,"the average delay to move a FS from the ground zone to the departed zone:"+ str(avDelay))
-    return
+def creactDictMoveFS():
+    dict=[]
+    dict.append({'name':'CLD_FORWARD','action':CLD_FORWARD_ACTION,'result':CLD_FORWARD_RESULT,'separator':')','ExpDelay':CLD_FORWARD_EXP_DELAY,'Zone1':'wait liste','Zone2':'ground Zone'})
+    dict.append({'name':'TAKE_OFF','action':TAKE_OFF_ACTION,'result':TAKE_OFF_RESULT,'separator':')','ExpDelay':TAKE_OFF_EXP_DELAY,'Zone1':'Ground zone','Zone2':'Departed zone'})
+    dict.append({'name':'LANDING','action':LANDING_ACTION,'result':LANDING_RESULT,'separator':')','ExpDelay':LANDING_EXP_DELAY,'Zone1':'landing zone','Zone2':'Landed zone'})
+    dict.append({'name':'WAIT_LISTE','action':WAIT_LISTE_ACTION,'result':WAIT_LISTE_RESULT,'separator':'/','ExpDelay':WAIT_LISTE_EXP_DELAY,'Zone1':'CLD First page','Zone2':'Wait liste'})
 
-def delayWaitListe(logs):
-    avDelay=0
-    delays=getDelayStringWithCallsign(logs,WAIT_LISTE_ACTION,WAIT_LISTE_RESULT,'/')
-    writePerfFile(PERF_FILE,"Delays to move a FS from the wait liste to the ground zone: "+str(delays))
-    for delay in delays:
-        avDelay=(avDelay+delay)/2
-    writePerfFile(PERF_FILE,"the average delay to move a FS from the wait liste to the ground zone:"+ str(avDelay))
-    return
+    return dict
 
-##### Global Variable#######
-ROLE_NAMES={'CLD_1','SPVR','GRO_1','GRO_2','ADC_1','ADC_2','ADC_3','DEP_1','DEP_2','FIN_1','FIN_2','FIN_3','APW_1','APW_2'}
-ROLE_OPEN_ACTION="UIS:  activation of Role by client "
-ROLE_OPEN_RESULT= "set role on front: "
-ROLE_OPEN_ACION_2="Button OK_BUTTON pressed."
-ROLE_CHANGE_ACTION=" change status ACTIVE_AND_SHOWN"
 
-CLD_FORWARD_ACTION="    LMB pressed on CLD_FORWARD (strip "
-CLD_FORWARD_RESULT="CLD_1 - Candidate visible strips in site.eStripboard.ifr.twr.CldGroundZone:"
 
-TAKE_OFF_ACTION="    LMB pressed on TAKE_OFF_BUTTON (strip "
-TAKE_OFF_RESULT="DepartedZone:"
+######## MAIN #########
 
-WAIT_LISTE_ACTION="    Double click on "
-WAIT_LISTE_RESULT="CLD_1 - Candidate visible strips in site.eStripboard.ifr.twr.CldWaitListZone:"
-
-PERF_FILE='performance'
-##### Global Variable#######
 
 logs=openlogfile('client')
 dictLogs=getLineTime(logs)
-#delayRoleOpening(dictLogs)
-delayWaitListe(dictLogs)
-delayCLDForward(dictLogs)
-delayTakeOff(dictLogs)
-#delayRoleChange(dictLogs)
+
+delayRoleOpening(dictLogs)
+
+dictMoveFS=creactDictMoveFS()
+delayMoveFS(dictLogs,dictMoveFS)
