@@ -3,7 +3,7 @@ import time
 import os
 
 
-##### Global Variable#######
+##### Global Variable######
 #Role opening
 ROLE_NAMES={'CLD_1','SPVR','GRO_1','GRO_2','ADC_1','ADC_2','ADC_3','DEP_1','DEP_2','FIN_1','FIN_2','FIN_3','APW_1','APW_2'}
 ROLE_OPEN_ACTION="UIS:  activation of Role by client "
